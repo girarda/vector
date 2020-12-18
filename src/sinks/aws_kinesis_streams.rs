@@ -197,6 +197,18 @@ impl Service<Vec<PutRecordsRequestEntry>> for KinesisService {
         Box::pin(async move {
             client
                 .put_records(request)
+                .map(|r: Result<PutRecordsOutput, RusotoError<PutRecordsError>>| {
+                    match r {
+                        Ok(res) => {
+                            if res.failed_record_count.unwrap() > 0 {
+                                return Result::Err(rusoto_core::RusotoError::Service(PutRecordsError::ProvisionedThroughputExceeded("Error".to_string())));
+                            } else {
+                                return Result::Ok(res)
+                            }
+                        }
+                        _ => r
+                    }
+                })
                 .inspect_ok(|_| {
                     for byte_size in sizes {
                         emit!(AwsKinesisStreamsEventSent { byte_size });
